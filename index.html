@@ -1,0 +1,235 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CivicFix AI | Civic Issue Reporter</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f4f7fb; color:#182536; }
+    .navbar { background:#102a43; }
+    .hero { background:linear-gradient(120deg,#102a43,#176b87); color:white; border-radius:20px; }
+    .stat, .panel { background:white; border:0; border-radius:16px; box-shadow:0 4px 18px #102a4310; }
+    .stat { padding:20px; height:100%; }
+    .stat h2 { font-weight:800; }
+    .btn-main { background:#087f8c; color:white; }
+    .btn-main:hover { background:#066873; color:white; }
+    .issue { border:1px solid #e7edf3; border-radius:12px; padding:16px; }
+    .small-label { font-size:12px; color:#68788a; text-transform:uppercase; }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-dark py-3">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="#">🏙️ CivicFix AI</a>
+    <span class="text-white-50 small">Smarter cities start with us</span>
+  </div>
+</nav>
+
+<main class="container py-4">
+  <section class="hero p-4 p-md-5 mb-4">
+    <span class="badge text-bg-light mb-3">COMMUNITY • TECHNOLOGY • IMPACT</span>
+    <h1 class="fw-bold">Your City. Your Voice.</h1>
+    <p class="mb-0">Report civic problems, track issues and help build a better community.</p>
+  </section>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-4"><div class="stat">
+      <div class="small-label">Total Reports</div><h2 id="total">0</h2>
+    </div></div>
+    <div class="col-6 col-lg-4"><div class="stat">
+      <div class="small-label">Pending</div><h2 id="pending">0</h2>
+    </div></div>
+    <div class="col-12 col-lg-4"><div class="stat">
+      <div class="small-label">Resolved</div><h2 id="resolved">0</h2>
+    </div></div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <section class="panel p-4">
+        <h4 class="fw-bold mb-3">Report an Issue</h4>
+        <form id="issueForm">
+          <label class="form-label">Issue title</label>
+          <input id="title" class="form-control mb-3"
+            placeholder="e.g. Pothole near college" required maxlength="100">
+
+          <label class="form-label">Category</label>
+          <select id="category" class="form-select mb-3" required>
+            <option value="">Choose category</option>
+            <option>Road Damage</option>
+            <option>Garbage</option>
+            <option>Streetlight</option>
+            <option>Water Supply</option>
+            <option>Other</option>
+          </select>
+
+          <label class="form-label">Location</label>
+          <input id="location" class="form-control mb-3"
+            placeholder="Area or landmark" required maxlength="120">
+
+          <label class="form-label">Description</label>
+          <textarea id="description" class="form-control mb-3"
+            rows="3" placeholder="Describe the problem..." required maxlength="1000"></textarea>
+
+          <button class="btn btn-main w-100" type="submit">Submit Report +</button>
+        </form>
+        <div id="message" class="mt-3 small" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div class="col-lg-7">
+      <section class="panel p-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <h4 class="fw-bold mb-0">Community Reports</h4>
+          <select id="filter" class="form-select" style="max-width:180px">
+            <option value="All">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+        <input id="search" class="form-control mb-3"
+          placeholder="Search title, category or location...">
+        <div id="reports" class="d-grid gap-3"></div>
+      </section>
+    </div>
+  </div>
+  <p class="text-center text-secondary small mt-4">
+    CivicFix AI • Prototype for community-driven civic improvement
+  </p>
+</main>
+
+<script>
+  const KEY = "civicfix-reports-v1";
+  let issues = [];
+
+  try {
+    issues = JSON.parse(localStorage.getItem(KEY) || "[]");
+    if (!Array.isArray(issues)) issues = [];
+  } catch {
+    issues = [];
+  }
+
+  const $ = id => document.getElementById(id);
+
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(issues));
+      return true;
+    } catch {
+      $("message").textContent = "Could not save data in this browser.";
+      return false;
+    }
+  }
+
+  function render() {
+    $("total").textContent = issues.length;
+    $("pending").textContent =
+      issues.filter(i => i.status === "Pending").length;
+    $("resolved").textContent =
+      issues.filter(i => i.status === "Resolved").length;
+
+    const status = $("filter").value;
+    const q = $("search").value.trim().toLowerCase();
+
+    const filtered = issues.filter(i =>
+      (status === "All" || i.status === status) &&
+      [i.title, i.category, i.location, i.description]
+        .some(v => v.toLowerCase().includes(q))
+    );
+
+    const container = $("reports");
+    container.replaceChildren();
+
+    if (!filtered.length) {
+      const empty = document.createElement("p");
+      empty.className = "text-secondary py-4 text-center";
+      empty.textContent = "No reports found. Submit the first report!";
+      container.append(empty);
+      return;
+    }
+
+    filtered.forEach(issue => {
+      const card = document.createElement("article");
+      card.className = "issue";
+
+      const heading = document.createElement("h5");
+      heading.className = "fw-bold";
+      heading.textContent = issue.title;
+
+      const detail = document.createElement("p");
+      detail.className = "text-secondary mb-2";
+      detail.textContent =
+        issue.category + " • " + issue.location;
+
+      const desc = document.createElement("p");
+      desc.textContent = issue.description;
+
+      const badge = document.createElement("span");
+      badge.className = "badge text-bg-light border mb-3";
+      badge.textContent = issue.status;
+
+      const select = document.createElement("select");
+      select.className = "form-select form-select-sm";
+      select.setAttribute("aria-label", "Update report status");
+
+      ["Pending", "In Progress", "Resolved"].forEach(s => {
+        const option = document.createElement("option");
+        option.value = s;
+        option.textContent = s;
+        option.selected = s === issue.status;
+        select.append(option);
+      });
+
+      select.addEventListener("change", () => {
+        const previous = issue.status;
+        issue.status = select.value;
+        if (!save()) {
+          issue.status = previous;
+          return;
+        }
+        render();
+      });
+
+      card.append(heading, detail, desc, badge, select);
+      container.append(card);
+    });
+  }
+
+  $("issueForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const issue = {
+      id: Date.now(),
+      title: $("title").value.trim(),
+      category: $("category").value,
+      location: $("location").value.trim(),
+      description: $("description").value.trim(),
+      status: "Pending"
+    };
+
+    if (!issue.title || !issue.category ||
+        !issue.location || !issue.description) {
+      $("message").textContent = "Please complete all fields.";
+      return;
+    }
+
+    issues.unshift(issue);
+    if (!save()) {
+      issues.shift();
+      return;
+    }
+
+    $("issueForm").reset();
+    $("message").textContent = "Report submitted successfully!";
+    render();
+  });
+
+  $("filter").addEventListener("change", render);
+  $("search").addEventListener("input", render);
+  render();
+</script>
+</body>
+</html>
